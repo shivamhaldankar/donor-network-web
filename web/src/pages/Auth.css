@@ -1,0 +1,179 @@
+/* ============================================================
+   Pulse Auth Page Stylesheet
+   Owned by Member C (Web foundation)
+   ============================================================ */
+
+.pulse-auth-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  background: radial-gradient(circle at 50% 20%, #EAF6F3 0%, var(--sand) 100%);
+}
+
+.pulse-auth-card {
+  width: 100%;
+  max-width: 480px;
+  background-color: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: 32px;
+}
+
+.pulse-auth-brand {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.pulse-auth-brand__icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, var(--teal) 0%, #159b7b 100%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--white);
+  box-shadow: 0 4px 12px rgba(15, 110, 86, 0.35);
+  margin-bottom: 12px;
+}
+
+.pulse-auth-brand__title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+}
+
+.pulse-auth-brand__subtitle {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
+
+/* Dev fake auth banner */
+.pulse-dev-auth-banner {
+  background-color: var(--teal-light);
+  border: 1px solid var(--teal-surface);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+
+.pulse-dev-auth-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--teal);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pulse-dev-auth-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pulse-dev-btn {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--white);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  transition: all var(--transition-fast);
+}
+
+.pulse-dev-btn:hover {
+  background-color: var(--teal);
+  color: var(--white);
+  border-color: var(--teal);
+}
+
+/* Tabs: Sign In / Sign Up */
+.pulse-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background-color: var(--sand);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+}
+
+.pulse-auth-tab {
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-muted);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.pulse-auth-tab.active {
+  background-color: var(--white);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Role toggle */
+.pulse-role-toggle {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.pulse-role-btn {
+  flex: 1;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background-color: var(--sand-light);
+  color: var(--ink-muted);
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all var(--transition-fast);
+}
+
+.pulse-role-btn.active {
+  border-color: var(--teal);
+  background-color: var(--teal-light);
+  color: var(--teal);
+}
+
+.pulse-auth-submit {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  font-size: 15px;
+}
+
+.pulse-auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 13px;
+}
+
+.pulse-admin-link {
+  color: var(--ink-muted);
+  font-size: 12px;
+  text-decoration: underline;
+  transition: color var(--transition-fast);
+}
+
+.pulse-admin-link:hover {
+  color: var(--ink);
+}
