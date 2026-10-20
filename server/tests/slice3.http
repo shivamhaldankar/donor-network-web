@@ -1,0 +1,124 @@
+### Pulse — Slice 3 API Tests (Owner: Member C)
+### Organ matching, waitlist, pledge lifecycle, and staff dashboard stats.
+### Run with VS Code REST Client (humao.rest-client) or Invoke-RestMethod in PowerShell.
+
+@baseUrl = http://localhost:5000/api
+
+### ============================================================
+### 1. Authentication
+### ============================================================
+
+### 1a. Login as seeded staff (City Care Hospital, Pune — verified)
+# @name staffLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "STAFF",
+  "email": "staff.citycare@example.com",
+  "password": "Pulse@123"
+}
+
+### Capture staff token
+@staffToken = {{staffLogin.response.body.token}}
+
+### 1b. Login as seeded donor (Aarav Shah, Pune, O+)
+# @name donorLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "Pulse@123"
+}
+
+### Capture donor token
+@donorToken = {{donorLogin.response.body.token}}
+
+
+### ============================================================
+### 2. Donor Organ Pledges
+### ============================================================
+
+### 2a. List own organ pledges (Aarav should see his seeded Kidney pledge)
+GET {{baseUrl}}/organs/pledges
+Authorization: Bearer {{donorToken}}
+
+### 2b. Pledge an additional organ (Cornea)
+# @name newPledge
+POST {{baseUrl}}/organs/pledges
+Authorization: Bearer {{donorToken}}
+Content-Type: application/json
+
+{
+  "organ_type": "Cornea"
+}
+
+### Capture new pledge ID
+@corneaPledgeId = {{newPledge.response.body.organ_id}}
+
+### 2c. Withdraw the new Cornea pledge
+DELETE {{baseUrl}}/organs/pledges/{{corneaPledgeId}}
+Authorization: Bearer {{donorToken}}
+
+
+### ============================================================
+### 3. Staff Waitlist Management
+### ============================================================
+
+### 3a. Staff adds a patient to their hospital's organ waitlist
+# @name addPatient
+POST {{baseUrl}}/organs/waitlist
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "patient_name": "Kishore Kumar",
+  "organ_type": "Kidney",
+  "blood_group": "O",
+  "urgency_score": 8
+}
+
+### 3b. Staff views their hospital's ranked waitlist
+GET {{baseUrl}}/organs/waitlist
+Authorization: Bearer {{staffToken}}
+
+
+### ============================================================
+### 4. Organ Matching & Proposal Confirmation
+### ============================================================
+
+### 4a. Staff lists available organ pledges across the network
+### Privacy check: donor name and contact details MUST NOT be exposed
+GET {{baseUrl}}/organs/pledges/available
+Authorization: Bearer {{staffToken}}
+
+### 4b. Staff triggers organ matching for Aarav's Kidney (organ_id = 1)
+### Expected: 3 ranked proposals
+### Privacy check: Sunita Rao (Hospital 2) is masked as "Patient #2" for City Care staff
+# @name runMatch
+POST {{baseUrl}}/organs/pledges/1/match
+Authorization: Bearer {{staffToken}}
+
+### Capture first proposal ID
+@firstProposalId = {{runMatch.response.body[0].organ_match_id}}
+
+### 4c. Staff confirms the first proposal (Ramesh Patil at City Care)
+### Must return 200 { "ok": true }
+POST {{baseUrl}}/organs/matches/{{firstProposalId}}/confirm
+Authorization: Bearer {{staffToken}}
+
+### 4d. Second confirmation of the same proposal must fail with 409 PROPOSAL_NOT_ACTIVE
+POST {{baseUrl}}/organs/matches/{{firstProposalId}}/confirm
+Authorization: Bearer {{staffToken}}
+
+
+### ============================================================
+### 5. Staff Dashboard Stats
+### ============================================================
+
+### 5a. Get staff dashboard counts
+### Returns { open_critical_requests, eligible_donors, waitlist_size }
+GET {{baseUrl}}/stats/staff
+Authorization: Bearer {{staffToken}}
