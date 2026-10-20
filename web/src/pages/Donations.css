@@ -1,0 +1,54 @@
+/* ============================================================
+   Pulse — Donations Page Styles
+   Owner: Member A (Slice 1)
+   ============================================================ */
+
+.pulse-donations-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 900px) {
+  .pulse-donations-grid {
+    grid-template-columns: 420px 1fr;
+  }
+}
+
+.pulse-ineligible-alert {
+  background: var(--sand, #F6F4EE);
+  border: 1px solid var(--warn, #B45309);
+  border-left: 4px solid var(--warn, #B45309);
+  padding: 16px;
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: 20px;
+}
+
+.pulse-ineligible-alert__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--warn, #B45309);
+  margin: 0 0 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-ineligible-alert__msg {
+  font-size: 0.875rem;
+  color: var(--ink, #0B2B2C);
+  margin: 0;
+}
+
+.pulse-success-alert {
+  background: var(--teal-light, #EAF6F3);
+  border: 1px solid var(--teal, #0F6E56);
+  border-left: 4px solid var(--teal, #0F6E56);
+  padding: 16px;
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: 20px;
+  color: var(--teal, #0F6E56);
+  font-size: 0.875rem;
+  font-weight: 500;
+}

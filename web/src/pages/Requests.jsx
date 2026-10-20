@@ -1,654 +1,506 @@
-import { useState } from 'react';
-import { useAuth } from '../context/AuthContext';
-import {
-  AlertTriangle,
-  Building2,
-  Clock,
-  Plus,
-  Heart,
-  Droplet,
-  Activity,
-  CheckCircle2,
-  ShieldCheck,
-  Send,
-  X
-} from 'lucide-react';
+// ============================================================
+// Pulse Blood & Organ Requests Management Page
+// Owned by Member A (Slice 1: Blood matching, eligibility & donor profile)
+// Contract §5, §6:
+//   - Route: /requests (STAFF, ADMIN)
+//   - Form with conditional blood-type vs organ-type, urgency, radius.
+//     Admin is read-only (requests created by hospital staff).
+//   - After a CRITICAL blood request is created, immediately load and show matched donors with distance.
+//   - List of hospital requests with status badges and Cancel button.
+//   - Coral badges ONLY for CRITICAL urgency.
+// ============================================================
 
+import React, { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '../auth/AuthContext';
+import { api } from '../api/client';
+import { PageHeader, Card, Badge, Spinner, ErrorBox, EmptyState } from '../components/ui';
+import './Requests.css';
 
-const INITIAL_REQUESTS = [
-  {
-    id: 101,
-    patientName: 'Emergency Trauma Ward #4',
-    patientCode: 'PT-9042',
-    hospitalName: 'Apollo City Hospital',
-    department: 'ICU & Trauma Center',
-    requestType: 'BLOOD',
-    bloodType: 'O-',
-    unitsRequired: 3,
-    urgency: 'CRITICAL',
-    organType: '',
-    timeAgo: '15 mins ago',
-    requiredWithin: 'Immediate (< 2 hrs)',
-    contactPerson: 'Dr. Priya Patel (Chief Blood Bank Officer)',
-    contactPhone: '+91 98123 45678',
-    status: 'OPEN',
-    responsesCount: 1,
-  },
-  {
-    id: 102,
-    patientName: 'Pediatric Cardiac Surgery',
-    patientCode: 'PT-8819',
-    hospitalName: 'Lilavati Children Hospital',
-    department: 'Pediatric Cardiac ICU',
-    requestType: 'BLOOD',
-    bloodType: 'AB-',
-    unitsRequired: 2,
-    urgency: 'CRITICAL',
-    organType: '',
-    timeAgo: '45 mins ago',
-    requiredWithin: 'Today by 6:00 PM',
-    contactPerson: 'Nurse Supervisor Reena',
-    contactPhone: '+91 97788 11223',
-    status: 'OPEN',
-    responsesCount: 0,
-  },
-  {
-    id: 103,
-    patientName: 'Renal Transplant Program',
-    patientCode: 'PT-7650',
-    hospitalName: 'Fortis Healthcare',
-    department: 'Nephrology & Organ Transplant',
-    requestType: 'ORGAN',
-    bloodType: 'B+',
-    unitsRequired: 1,
-    urgency: 'MODERATE',
-    organType: 'Kidney',
-    timeAgo: '2 hours ago',
-    requiredWithin: 'Within 48 hours',
-    contactPerson: 'Dr. Alok Verma',
-    contactPhone: '+91 99887 66554',
-    status: 'OPEN',
-    responsesCount: 2,
-  },
-  {
-    id: 104,
-    patientName: 'Oncology Chemotherapy Support',
-    patientCode: 'PT-5421',
-    hospitalName: 'Tata Memorial Cancer Center',
-    department: 'Hemato-Oncology',
-    requestType: 'BLOOD',
-    bloodType: 'A+',
-    unitsRequired: 4,
-    urgency: 'MODERATE',
-    organType: '',
-    timeAgo: '5 hours ago',
-    requiredWithin: 'Next 24 hours',
-    contactPerson: 'Blood Bank Desk',
-    contactPhone: '+91 98665 44332',
-    status: 'OPEN',
-    responsesCount: 3,
-  },
-  {
-    id: 105,
-    patientName: 'Cornea Restoration Registry',
-    patientCode: 'PT-3199',
-    hospitalName: 'L.V. Prasad Eye Institute',
-    department: 'Ophthalmology Surgery',
-    requestType: 'ORGAN',
-    bloodType: '',
-    unitsRequired: 1,
-    urgency: 'LOW',
-    organType: 'Cornea',
-    timeAgo: '1 day ago',
-    requiredWithin: 'Elective (Within 1 week)',
-    contactPerson: 'Eye Bank Coordinator',
-    contactPhone: '+91 98222 33445',
-    status: 'OPEN',
-    responsesCount: 4,
-  },
-];
+const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+const ORGAN_TYPES = ['Kidney', 'Liver', 'Cornea', 'Heart', 'Lung', 'Pancreas'];
 
-export default function Requests() {
-  const { user, isStaff, loginAsDemo } = useAuth();
+export function Requests() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
 
-  const [requestList, setRequestList] = useState(INITIAL_REQUESTS);
-  const [showForm, setShowForm] = useState(false);
-  const [activeTab, setActiveTab] = useState('ALL'); // ALL, BLOOD, ORGAN
-  const [urgencyFilter, setUrgencyFilter] = useState('ALL'); // ALL, CRITICAL, MODERATE, LOW
+  // State
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   // Form state
-  const [patientName, setPatientName] = useState('');
   const [requestType, setRequestType] = useState('BLOOD');
-  const [bloodType, setBloodType] = useState('O+');
-  const [organType, setOrganType] = useState('Kidney');
+  const [bloodTypeNeeded, setBloodTypeNeeded] = useState('O+');
+  const [organTypeNeeded, setOrganTypeNeeded] = useState('Kidney');
   const [urgency, setUrgency] = useState('CRITICAL');
-  const [unitsRequired, setUnitsRequired] = useState(2);
-  const [hospitalName, setHospitalName] = useState(user?.hospitalName || 'Apollo City Hospital');
-  const [department, setDepartment] = useState(user?.department || 'Emergency Care');
-  const [requiredWithin, setRequiredWithin] = useState('Within 4 hours');
+  const [radiusKm, setRadiusKm] = useState(50);
+  const [unitsNeeded, setUnitsNeeded] = useState(1);
+  const [patientName, setPatientName] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState(null);
 
-  // Response confirmation state
-  const [respondingTo, setRespondingTo] = useState(null);
-  const [responseSuccess, setResponseSuccess] = useState(null);
+  // Recently matched donors view (after creating a critical request)
+  const [recentMatchResult, setRecentMatchResult] = useState(null);
+  const [matchLoading, setMatchLoading] = useState(false);
 
-  const handleSubmit = (e) => {
+  // Inspect matches modal / expanded view
+  const [inspectRequestId, setInspectRequestId] = useState(null);
+  const [inspectedMatches, setInspectedMatches] = useState([]);
+  const [inspectLoading, setInspectLoading] = useState(false);
+
+  // Load requests
+  const loadRequests = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const url = statusFilter === 'ALL' ? '/requests' : `/requests?status=${statusFilter}`;
+      const data = await api.get(url);
+      setRequests(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load requests:', err);
+      setError(err.message || 'Could not load requests.');
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    loadRequests();
+  }, [loadRequests]);
+
+  // Handle request submission
+  const handleCreateRequest = async (e) => {
     e.preventDefault();
-    if (!patientName.trim()) return;
+    setFormError(null);
+    setSubmitting(true);
+    setRecentMatchResult(null);
 
-    const newReq = {
-      id: Date.now(),
-      patientName: patientName.trim(),
-      patientCode: `PT-${Math.floor(1000 + Math.random() * 9000)}`,
-      hospitalName: hospitalName.trim() || 'General Medical Hospital',
-      department: department.trim() || 'Emergency Ward',
-      requestType,
-      bloodType: requestType === 'BLOOD' ? bloodType : '',
-      organType: requestType === 'ORGAN' ? organType : '',
-      unitsRequired: Number(unitsRequired) || 1,
-      urgency,
-      timeAgo: 'Just now',
-      requiredWithin,
-      contactPerson: user?.name || 'Hospital Duty Doctor',
-      contactPhone: user?.phone || '+91 98765 00000',
-      status: 'OPEN',
-      responsesCount: 0,
-    };
+    try {
+      const payload = {
+        request_type: requestType,
+        blood_type_needed: requestType === 'BLOOD' ? bloodTypeNeeded : undefined,
+        organ_type_needed: requestType === 'ORGAN' ? organTypeNeeded : undefined,
+        urgency,
+        radius_km: parseInt(radiusKm, 10),
+        units_needed: parseInt(unitsNeeded, 10),
+        patient_name: patientName.trim() || undefined,
+      };
 
-    setRequestList([newReq, ...requestList]);
-    setPatientName('');
-    setShowForm(false);
+      const res = await api.post('/requests', payload);
+
+      // If critical blood request matched donors, immediately fetch matched donors list
+      if (res.status === 'MATCHED' && res.match_count > 0) {
+        setMatchLoading(true);
+        try {
+          const matchedDonors = await api.get(`/requests/${res.request_id}/matches`);
+          setRecentMatchResult({
+            requestId: res.request_id,
+            matchCount: res.match_count,
+            bloodType: bloodTypeNeeded,
+            radius: radiusKm,
+            matches: Array.isArray(matchedDonors) ? matchedDonors : [],
+          });
+        } catch (mErr) {
+          console.warn('Could not load immediate match details:', mErr);
+        } finally {
+          setMatchLoading(false);
+        }
+      }
+
+      // Reset form
+      setPatientName('');
+      loadRequests();
+    } catch (err) {
+      console.error('Failed to create request:', err);
+      setFormError(err.message || 'Failed to create request.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRespond = (req) => {
-    setRespondingTo(req);
+  // Handle request cancellation
+  const handleCancelRequest = async (requestId) => {
+    if (!window.confirm('Are you sure you want to cancel this request?')) return;
+    setError(null);
+    try {
+      await api.patch(`/requests/${requestId}/cancel`);
+      // Update local state
+      setRequests((prev) =>
+        prev.map((r) => (r.request_id === requestId ? { ...r, status: 'CANCELLED' } : r))
+      );
+    } catch (err) {
+      console.error('Failed to cancel request:', err);
+      setError(err.message || 'Could not cancel request.');
+    }
   };
 
-  const confirmResponse = () => {
-    if (!respondingTo) return;
-    setRequestList((prev) =>
-      prev.map((r) =>
-        r.id === respondingTo.id ? { ...r, responsesCount: r.responsesCount + 1 } : r
-      )
-    );
-    setResponseSuccess(respondingTo);
-    setRespondingTo(null);
-    setTimeout(() => setResponseSuccess(null), 5000);
+  // Inspect matches for an existing request
+  const handleInspectMatches = async (requestId) => {
+    if (inspectRequestId === requestId) {
+      setInspectRequestId(null);
+      return;
+    }
+    setInspectRequestId(requestId);
+    setInspectLoading(true);
+    try {
+      const data = await api.get(`/requests/${requestId}/matches`);
+      setInspectedMatches(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error('Failed to load matches:', err);
+      setInspectedMatches([]);
+    } finally {
+      setInspectLoading(false);
+    }
   };
-
-  const filteredRequests = requestList.filter((req) => {
-    const matchesTab =
-      activeTab === 'ALL' || req.requestType === activeTab;
-    const matchesUrgency =
-      urgencyFilter === 'ALL' || req.urgency === urgencyFilter;
-    return matchesTab && matchesUrgency;
-  });
-
-  const criticalCount = requestList.filter((r) => r.urgency === 'CRITICAL').length;
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Toast Notification */}
-      {responseSuccess && (
-        <div className="fixed bottom-6 right-6 z-50 max-w-md p-4 rounded-2xl bg-emerald-900 text-white shadow-2xl flex items-start gap-3 border border-emerald-700 animate-in fade-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-          <div>
-            <h4 className="font-bold text-sm">Response Dispatched!</h4>
-            <p className="text-xs text-emerald-200 mt-1">
-              Your pledge has been sent to {responseSuccess.hospitalName}. The duty coordinator will contact you immediately. Thank you for saving lives!
-            </p>
-          </div>
-          <button
-            onClick={() => setResponseSuccess(null)}
-            className="text-emerald-400 hover:text-white ml-auto"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+    <div className="container" style={{ paddingBottom: '48px' }}>
+      <PageHeader
+        title="Blood & Organ Availability Requests"
+        subtitle={
+          isAdmin
+            ? 'Administrator View: Inspect hospital requests across the entire network.'
+            : 'Hospital Staff View: Create critical blood or organ requests and view matched nearby donors.'
+        }
+      />
 
-      {/* Header Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-amber-600 via-rose-600 to-red-700 text-white p-6 sm:p-10 mb-8 shadow-xl shadow-rose-600/15">
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-white/20 backdrop-blur-md text-white">
-                <span className="w-2 h-2 rounded-full bg-red-300 animate-ping" />
-                Live Dispatch Center
-              </span>
-              {criticalCount > 0 && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-500 text-white shadow-xs">
-                  {criticalCount} CRITICAL
-                </span>
-              )}
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tight leading-tight">
-              Emergency Patient Requests
-            </h1>
-            <p className="text-rose-100 text-sm sm:text-base mt-2">
-              Verified real-time blood and organ requirements issued by authorized medical centers and trauma units.
-            </p>
-          </div>
+      {error && <ErrorBox message={error} onRetry={loadRequests} />}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {isStaff ? (
-              <button
-                onClick={() => setShowForm(!showForm)}
-                className="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white text-rose-700 hover:bg-rose-50 font-bold text-sm shadow-md transition-all hover:scale-105 active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                <span>{showForm ? 'Close Dispatch Form' : 'Publish Emergency Need'}</span>
-              </button>
-            ) : (
-              <div className="flex flex-col sm:flex-row items-center gap-2 bg-white/10 backdrop-blur-md p-2 rounded-2xl border border-white/20">
-                <span className="text-xs text-white/90 px-2 font-medium">Hospital Staff Portal:</span>
-                <button
-                  onClick={() => loginAsDemo('staff')}
-                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white text-slate-900 hover:bg-rose-50 text-xs font-bold transition-all shadow-xs"
-                >
-                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Switch to Staff View</span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Decorative circle */}
-        <div className="absolute -left-10 -bottom-10 w-72 h-72 bg-white/10 rounded-full blur-3xl pointer-events-none" />
-      </div>
-
-      {/* Staff Dispatch Request Form */}
-      {showForm && isStaff && (
-        <div className="mb-10 bg-white rounded-3xl border border-rose-200/80 shadow-xl shadow-rose-500/5 p-6 sm:p-8 animate-in fade-in slide-in-from-top-4 duration-300">
-          <div className="flex items-center justify-between pb-4 mb-6 border-b border-slate-100">
-            <div>
-              <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-indigo-600" />
-                <span>Publish Hospital Emergency Request</span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Dispatch an emergency alert across our registered donor network.
-              </p>
-            </div>
-            <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-              Authorized Staff: {user?.name}
+      {/* Immediate Match Banner (Appears after creating a CRITICAL request) */}
+      {recentMatchResult && (
+        <div className="pulse-matched-banner" role="region" aria-label="Auto-matching results">
+          <div className="pulse-matched-banner__title">
+            <svg width="22" height="22" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>
+              Request #{recentMatchResult.requestId} Matched {recentMatchResult.matchCount} Eligible Donors!
             </span>
           </div>
+          <p style={{ margin: '4px 0 0 0', fontSize: '0.875rem', color: 'var(--ink)' }}>
+            The database trigger automatically matched {recentMatchResult.matchCount} eligible{' '}
+            <strong>{recentMatchResult.bloodType}</strong> donor(s) within {recentMatchResult.radius} km.
+            Notifications have been queued and donors can be contacted:
+          </p>
 
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Patient Identifier / Case Name <span className="text-rose-500">*</span>
-              </label>
-              <input
-                type="text"
-                required
-                placeholder="e.g. ICU Bed #3 / Trauma Case"
-                value={patientName}
-                onChange={(e) => setPatientName(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-              />
+          {matchLoading ? (
+            <Spinner size="sm" label="Loading donor distances..." />
+          ) : (
+            <div className="pulse-donor-matches-grid">
+              {recentMatchResult.matches.map((m) => (
+                <div key={m.match_id} className="pulse-donor-match-tile">
+                  <div className="pulse-donor-match-tile__name">
+                    <span>{m.name}</span>
+                    <Badge tone="ok">{m.blood_type}</Badge>
+                  </div>
+                  <div className="pulse-donor-match-tile__dist">
+                    {m.distance_km !== null ? `📍 ${m.distance_km} km away` : '📍 In your city'}
+                  </div>
+                  <div className="pulse-donor-match-tile__phone">
+                    📞 {m.phone || 'Phone on file'}
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+        </div>
+      )}
 
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Hospital Name
-              </label>
-              <input
-                type="text"
-                value={hospitalName}
-                onChange={(e) => setHospitalName(e.target.value)}
-                placeholder="Hospital Name"
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Department / Ward
-              </label>
-              <input
-                type="text"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. Emergency & Surgery"
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Request Category
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setRequestType('BLOOD')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                    requestType === 'BLOOD'
-                      ? 'bg-rose-50 border-rose-400 text-rose-700'
-                      : 'bg-slate-50 border-slate-200 text-slate-600'
-                  }`}
-                >
-                  <Droplet className="w-3.5 h-3.5 text-rose-500" />
-                  <span>Blood / Platelets</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRequestType('ORGAN')}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold border transition-all flex items-center justify-center gap-1.5 ${
-                    requestType === 'ORGAN'
-                      ? 'bg-rose-50 border-rose-400 text-rose-700'
-                      : 'bg-slate-50 border-slate-200 text-slate-600'
-                  }`}
-                >
-                  <Activity className="w-3.5 h-3.5 text-indigo-500" />
-                  <span>Organ Transplant</span>
-                </button>
-              </div>
-            </div>
-
-            {requestType === 'BLOOD' ? (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Required Blood Group
-                </label>
-                <select
-                  value={bloodType}
-                  onChange={(e) => setBloodType(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                >
-                  {['O-', 'O+', 'A-', 'A+', 'B-', 'B+', 'AB-', 'AB+'].map((bg) => (
-                    <option key={bg} value={bg}>
-                      {bg} {bg === 'O-' ? '(Universal Need)' : ''}
-                    </option>
-                  ))}
-                </select>
+      <div className="pulse-requests-grid">
+        {/* Left Column: Create Request Form */}
+        <div>
+          <Card title={isAdmin ? 'Request Creation (Staff Only)' : 'Create New Request'}>
+            {isAdmin ? (
+              <div style={{ color: 'var(--ink-muted)', fontSize: '0.875rem' }}>
+                <p>
+                  As an Administrator, you have full read access to inspect all hospital requests and audit trails.
+                  Requests are initiated by verified Hospital Staff accounts.
+                </p>
               </div>
             ) : (
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                  Target Organ
-                </label>
-                <select
-                  value={organType}
-                  onChange={(e) => setOrganType(e.target.value)}
-                  className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
+              <form onSubmit={handleCreateRequest}>
+                {formError && <ErrorBox message={formError} />}
+
+                {/* Type Toggle: BLOOD vs ORGAN */}
+                <div className="pulse-type-toggle">
+                  <button
+                    type="button"
+                    className={`pulse-type-toggle-btn ${requestType === 'BLOOD' ? 'pulse-type-toggle-btn--active' : ''}`}
+                    onClick={() => setRequestType('BLOOD')}
+                  >
+                    Blood Request
+                  </button>
+                  <button
+                    type="button"
+                    className={`pulse-type-toggle-btn ${requestType === 'ORGAN' ? 'pulse-type-toggle-btn--active' : ''}`}
+                    onClick={() => setRequestType('ORGAN')}
+                  >
+                    Organ Request
+                  </button>
+                </div>
+
+                {/* Conditional Field: Blood Type vs Organ Type */}
+                {requestType === 'BLOOD' ? (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label htmlFor="blood-type-select" className="form-label">Blood Type Needed *</label>
+                    <select
+                      id="blood-type-select"
+                      className="input-control"
+                      value={bloodTypeNeeded}
+                      onChange={(e) => setBloodTypeNeeded(e.target.value)}
+                      required
+                    >
+                      {BLOOD_TYPES.map((bt) => (
+                        <option key={bt} value={bt}>{bt}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div style={{ marginBottom: '16px' }}>
+                    <label htmlFor="organ-type-select" className="form-label">Organ Needed *</label>
+                    <select
+                      id="organ-type-select"
+                      className="input-control"
+                      value={organTypeNeeded}
+                      onChange={(e) => setOrganTypeNeeded(e.target.value)}
+                      required
+                    >
+                      {ORGAN_TYPES.map((ot) => (
+                        <option key={ot} value={ot}>{ot}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Urgency Selector */}
+                <div style={{ marginBottom: '16px' }}>
+                  <label className="form-label">Urgency Level *</label>
+                  <div className="pulse-urgency-grid">
+                    <div
+                      className={`pulse-urgency-card pulse-urgency-card--critical ${urgency === 'CRITICAL' ? 'pulse-urgency-card--selected' : ''}`}
+                      onClick={() => setUrgency('CRITICAL')}
+                    >
+                      CRITICAL (Auto-match)
+                    </div>
+                    <div
+                      className={`pulse-urgency-card pulse-urgency-card--moderate ${urgency === 'MODERATE' ? 'pulse-urgency-card--selected' : ''}`}
+                      onClick={() => setUrgency('MODERATE')}
+                    >
+                      MODERATE
+                    </div>
+                    <div
+                      className={`pulse-urgency-card pulse-urgency-card--low ${urgency === 'LOW' ? 'pulse-urgency-card--selected' : ''}`}
+                      onClick={() => setUrgency('LOW')}
+                    >
+                      LOW
+                    </div>
+                  </div>
+                  {urgency === 'CRITICAL' && requestType === 'BLOOD' && (
+                    <p className="form-helper" style={{ color: 'var(--coral)', marginTop: 6, fontWeight: 500 }}>
+                      ⚡ Critical blood requests automatically run Haversine matching and notify nearby donors.
+                    </p>
+                  )}
+                </div>
+
+                {/* Search Radius */}
+                <div style={{ marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <label htmlFor="radius-input" className="form-label">Search Radius (km)</label>
+                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--teal)' }}>{radiusKm} km</span>
+                  </div>
+                  <input
+                    id="radius-input"
+                    type="range"
+                    min="5"
+                    max="500"
+                    step="5"
+                    value={radiusKm}
+                    onChange={(e) => setRadiusKm(e.target.value)}
+                    style={{ width: '100%', accentColor: 'var(--teal)' }}
+                  />
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--ink-muted)' }}>
+                    <span>5 km</span>
+                    <span>50 km (default)</span>
+                    <span>500 km</span>
+                  </div>
+                </div>
+
+                {/* Units Needed & Patient Name */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px', marginBottom: '16px' }}>
+                  <div>
+                    <label htmlFor="units-input" className="form-label">Units</label>
+                    <input
+                      id="units-input"
+                      type="number"
+                      min="1"
+                      max="50"
+                      className="input-control"
+                      value={unitsNeeded}
+                      onChange={(e) => setUnitsNeeded(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="patient-input" className="form-label">Patient Name (Optional)</label>
+                    <input
+                      id="patient-input"
+                      type="text"
+                      className="input-control"
+                      placeholder="e.g. Ramesh P."
+                      value={patientName}
+                      onChange={(e) => setPatientName(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                  disabled={submitting}
                 >
-                  {['Kidney', 'Liver', 'Cornea', 'Heart', 'Lung', 'Pancreas'].map((organ) => (
-                    <option key={organ} value={organ}>
-                      {organ}
-                    </option>
-                  ))}
-                </select>
+                  {submitting ? 'Submitting request...' : 'Publish Request'}
+                </button>
+              </form>
+            )}
+          </Card>
+        </div>
+
+        {/* Right Column: Hospital Requests List */}
+        <div>
+          <Card title={isAdmin ? 'All Network Requests' : 'Your Hospital Requests'}>
+            {/* Filter Tabs */}
+            <div className="pulse-filter-tabs">
+              {['ALL', 'OPEN', 'MATCHED', 'FULFILLED', 'CANCELLED'].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  className={`pulse-filter-tab ${statusFilter === st ? 'pulse-filter-tab--active' : ''}`}
+                  onClick={() => setStatusFilter(st)}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            {loading ? (
+              <Spinner label="Loading requests..." />
+            ) : requests.length === 0 ? (
+              <EmptyState title="No requests found">
+                No {statusFilter !== 'ALL' ? statusFilter.toLowerCase() : ''} requests currently on record.
+              </EmptyState>
+            ) : (
+              <div>
+                {requests.map((r) => {
+                  const isCritical = r.urgency === 'CRITICAL';
+                  const isMatched = r.status === 'MATCHED';
+                  const isCancellable = r.status === 'OPEN' || r.status === 'MATCHED';
+                  const isExpanded = inspectRequestId === r.request_id;
+
+                  return (
+                    <div
+                      key={r.request_id}
+                      className={`pulse-request-item ${isCritical ? 'pulse-request-item--critical' : ''}`}
+                    >
+                      <div className="pulse-request-item__header">
+                        <div>
+                          <h4 className="pulse-request-item__title">
+                            {r.request_type === 'BLOOD' ? `${r.blood_type_needed} Blood` : `${r.organ_type_needed} Organ`}
+                            {r.patient_name ? ` for ${r.patient_name}` : ''}
+                          </h4>
+                          <span style={{ fontSize: '0.8rem', color: 'var(--ink-muted)' }}>
+                            {r.hospital_name} • Request #{r.request_id}
+                          </span>
+                        </div>
+
+                        <div className="pulse-request-item__badges">
+                          {/* Coral Badge strictly for CRITICAL urgency */}
+                          <Badge tone={isCritical ? 'critical' : r.urgency === 'MODERATE' ? 'warn' : 'neutral'}>
+                            {r.urgency}
+                          </Badge>
+                          <Badge tone={isMatched ? 'ok' : r.status === 'FULFILLED' ? 'ok' : r.status === 'CANCELLED' ? 'neutral' : 'warn'}>
+                            {r.status}
+                          </Badge>
+                        </div>
+                      </div>
+
+                      <div className="pulse-request-item__details">
+                        <span>Radius: {r.radius_km} km</span>
+                        <span>Requested: {new Date(r.requested_on).toLocaleDateString()}</span>
+                        <span>
+                          Matches: <strong>{r.match_count || 0} donor(s)</strong>
+                        </span>
+                      </div>
+
+                      {/* Actions: View Matches & Cancel */}
+                      <div className="pulse-request-item__actions">
+                        <div>
+                          {r.match_count > 0 && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleInspectMatches(r.request_id)}
+                            >
+                              {isExpanded ? 'Hide Matches' : `View ${r.match_count} Matched Donor(s)`}
+                            </button>
+                          )}
+                        </div>
+
+                        <div>
+                          {isCancellable && (
+                            <button
+                              type="button"
+                              className="btn btn-sm"
+                              style={{ color: 'var(--coral)', border: '1px solid var(--border)' }}
+                              onClick={() => handleCancelRequest(r.request_id)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Expanded Matched Donors Drawer */}
+                      {isExpanded && (
+                        <div style={{ marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--border)' }}>
+                          {inspectLoading ? (
+                            <Spinner size="sm" label="Loading matched donors..." />
+                          ) : inspectedMatches.length === 0 ? (
+                            <p style={{ fontSize: '0.85rem', color: 'var(--ink-muted)' }}>No match logs recorded.</p>
+                          ) : (
+                            <div className="pulse-donor-matches-grid">
+                              {inspectedMatches.map((m) => (
+                                <div key={m.match_id} className="pulse-donor-match-tile">
+                                  <div className="pulse-donor-match-tile__name">
+                                    <span>{m.name}</span>
+                                    <Badge tone="ok">{m.blood_type}</Badge>
+                                  </div>
+                                  <div className="pulse-donor-match-tile__dist">
+                                    {m.distance_km !== null ? `📍 ${m.distance_km} km away` : '📍 Same-city fallback'}
+                                  </div>
+                                  <div className="pulse-donor-match-tile__phone">
+                                    📞 {m.phone || 'Phone on file'}
+                                  </div>
+                                  <div style={{ fontSize: '0.75rem', color: 'var(--ink-muted)' }}>
+                                    Status: <strong>{m.contacted_status}</strong>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Urgency Level
-              </label>
-              <select
-                value={urgency}
-                onChange={(e) => setUrgency(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 font-semibold"
-              >
-                <option value="CRITICAL">🔴 CRITICAL (Immediate Life Threat)</option>
-                <option value="MODERATE">🟡 MODERATE (Needed in 24-48 Hours)</option>
-                <option value="LOW">🟢 LOW (Elective / Advance Booking)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Units / Quantity Needed
-              </label>
-              <input
-                type="number"
-                min="1"
-                max="10"
-                value={unitsRequired}
-                onChange={(e) => setUnitsRequired(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Timeframe / Deadline
-              </label>
-              <input
-                type="text"
-                placeholder="e.g. Within 2 hours"
-                value={requiredWithin}
-                onChange={(e) => setRequiredWithin(e.target.value)}
-                className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-              />
-            </div>
-
-            <div className="md:col-span-3 flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all"
-              >
-                Dispatch Emergency Request
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Filter Tabs */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-4 mb-6 shadow-xs flex flex-col md:flex-row items-center justify-between gap-4">
-        {/* Category Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full md:w-auto">
-          {['ALL', 'BLOOD', 'ORGAN'].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setActiveTab(cat)}
-              className={`flex-1 md:flex-none px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                activeTab === cat
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {cat === 'ALL' && 'All Needs'}
-              {cat === 'BLOOD' && '🩸 Blood & Platelets'}
-              {cat === 'ORGAN' && '🫀 Organ Transplants'}
-            </button>
-          ))}
-        </div>
-
-        {/* Urgency Filter */}
-        <div className="flex items-center gap-1.5 w-full md:w-auto justify-end">
-          <span className="text-xs font-semibold text-slate-400 mr-1">Urgency:</span>
-          {['ALL', 'CRITICAL', 'MODERATE', 'LOW'].map((lvl) => (
-            <button
-              key={lvl}
-              onClick={() => setUrgencyFilter(lvl)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                urgencyFilter === lvl
-                  ? lvl === 'CRITICAL'
-                    ? 'bg-rose-600 text-white shadow-xs'
-                    : lvl === 'MODERATE'
-                    ? 'bg-amber-500 text-white shadow-xs'
-                    : 'bg-slate-900 text-white shadow-xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {lvl}
-            </button>
-          ))}
+          </Card>
         </div>
       </div>
-
-      {/* Requests Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {filteredRequests.map((req) => (
-          <div
-            key={req.id}
-            className={`bg-white rounded-3xl border transition-all p-6 flex flex-col justify-between ${
-              req.urgency === 'CRITICAL'
-                ? 'border-rose-300 shadow-md shadow-rose-500/10 hover:border-rose-400'
-                : 'border-slate-200/90 hover:border-slate-300 shadow-xs'
-            }`}
-          >
-            <div>
-              {/* Card Header */}
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black shadow-xs ${
-                      req.requestType === 'BLOOD'
-                        ? req.bloodType === 'O-'
-                          ? 'bg-rose-700 text-white ring-2 ring-rose-500/40'
-                          : 'bg-rose-50 text-rose-700 border border-rose-200'
-                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                    }`}
-                  >
-                    <span className="text-base leading-none">
-                      {req.requestType === 'BLOOD' ? req.bloodType : req.organType}
-                    </span>
-                    <span className="text-[9px] uppercase tracking-wider font-semibold opacity-75 mt-0.5">
-                      {req.requestType === 'BLOOD' ? `${req.unitsRequired} Units` : 'Donor'}
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 text-base">{req.patientName}</h3>
-                      <span className="text-[11px] font-mono text-slate-400">({req.patientCode})</span>
-                    </div>
-                    <p className="text-xs text-slate-600 flex items-center gap-1 mt-0.5 font-medium">
-                      <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                      {req.hospitalName} • {req.department}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Urgency Badge */}
-                <div className="flex flex-col items-end">
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold ${
-                      req.urgency === 'CRITICAL'
-                        ? 'bg-rose-100 text-rose-700 border border-rose-200 animate-pulse'
-                        : req.urgency === 'MODERATE'
-                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                        : 'bg-slate-100 text-slate-700'
-                    }`}
-                  >
-                    {req.urgency === 'CRITICAL' && <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />}
-                    {req.urgency}
-                  </span>
-                  <span className="text-[10px] text-slate-400 mt-1">{req.timeAgo}</span>
-                </div>
-              </div>
-
-              {/* Requirement Details */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 space-y-2 mb-4">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-500 flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5 text-rose-500" /> Timeframe:
-                  </span>
-                  <span className="font-bold text-slate-800">{req.requiredWithin}</span>
-                </div>
-
-                <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/50">
-                  <span className="text-slate-500">Contact Person:</span>
-                  <span className="font-medium text-slate-700">{req.contactPerson}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Card Action */}
-            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-500 flex items-center gap-1">
-                <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20" />
-                <span>{req.responsesCount} response{req.responsesCount !== 1 ? 's' : ''}</span>
-              </span>
-
-              <button
-                onClick={() => handleRespond(req)}
-                className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-xs ${
-                  req.urgency === 'CRITICAL'
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20 hover:scale-105'
-                    : 'bg-slate-900 hover:bg-slate-800 text-white hover:scale-105'
-                }`}
-              >
-                <Send className="w-3.5 h-3.5" />
-                <span>I Can Donate</span>
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {filteredRequests.length === 0 && (
-        <div className="text-center py-16 bg-white rounded-3xl border border-slate-200 mt-6">
-          <ShieldCheck className="w-12 h-12 text-emerald-400 mx-auto mb-3" />
-          <h3 className="text-lg font-bold text-slate-800">No Open Requests Under This Filter</h3>
-          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
-            All emergency needs for this selection are currently addressed or pending dispatch.
-          </p>
-        </div>
-      )}
-
-      {/* Response Confirmation Modal */}
-      {respondingTo && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mb-4">
-              <Heart className="w-6 h-6 fill-rose-500/20" />
-            </div>
-
-            <h3 className="text-lg font-black text-slate-900">Confirm Donor Response</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-4">
-              You are offering to respond to the emergency request at{' '}
-              <strong className="text-slate-800">{respondingTo.hospitalName}</strong> for{' '}
-              <strong className="text-rose-600">
-                {respondingTo.requestType === 'BLOOD' ? respondingTo.bloodType : respondingTo.organType}
-              </strong>.
-            </p>
-
-            <div className="p-3 bg-slate-50 rounded-xl text-xs space-y-1 mb-6 border border-slate-200">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Department:</span>
-                <span className="font-semibold text-slate-800">{respondingTo.department}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Urgency:</span>
-                <span className="font-bold text-rose-600">{respondingTo.urgency}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Duty Coordinator:</span>
-                <span className="font-semibold text-slate-800">{respondingTo.contactPerson}</span>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setRespondingTo(null)}
-                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmResponse}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs shadow-md shadow-rose-600/20 transition-all"
-              >
-                Confirm & Dispatch My Contact
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+export default Requests;
