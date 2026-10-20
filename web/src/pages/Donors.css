@@ -1,0 +1,56 @@
+/* ============================================================
+   Pulse — Eligible Donors Directory Styles
+   Owner: Member A (Slice 1)
+   ============================================================ */
+
+.pulse-donors-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.pulse-donors-search {
+  flex: 1;
+  min-width: 240px;
+  max-width: 380px;
+}
+
+.pulse-blood-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pulse-blood-pill {
+  padding: 4px 10px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--border, #D7DFDC);
+  background: var(--white, #FFFFFF);
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-muted, #526B6A);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pulse-blood-pill--active {
+  background: var(--teal, #0F6E56);
+  border-color: var(--teal, #0F6E56);
+  color: var(--white, #FFFFFF);
+}
+
+.pulse-privacy-callout {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--sand, #F6F4EE);
+  border: 1px solid var(--border, #D7DFDC);
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 14px;
+  font-size: 0.825rem;
+  color: var(--ink-muted, #526B6A);
+  margin-top: 16px;
+}

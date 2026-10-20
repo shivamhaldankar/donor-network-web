@@ -1,0 +1,258 @@
+/* ============================================================
+   Pulse — Donor Profile Styles
+   Owner: Member A (Slice 1)
+   Tokens: Space Grotesk (headings), Inter (body), Teal (#0F6E56),
+           Coral (#E0664A - for critical match alerts only).
+   ============================================================ */
+
+.pulse-profile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 960px) {
+  .pulse-profile-grid {
+    grid-template-columns: 360px 1fr;
+  }
+}
+
+/* ── Countdown Card ─────────────────────────────────────── */
+.pulse-countdown-card {
+  text-align: center;
+  padding: 12px 4px;
+}
+
+.pulse-countdown-ring-wrap {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  margin: 0 auto 16px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-countdown-svg {
+  transform: rotate(-90deg);
+  width: 170px;
+  height: 170px;
+}
+
+.pulse-countdown-bg {
+  stroke: var(--sand-hover, #EFECE3);
+}
+
+.pulse-countdown-progress {
+  stroke: var(--teal, #0F6E56);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
+.pulse-countdown-inner {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-countdown-number {
+  font-family: var(--font-heading);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--teal, #0F6E56);
+  line-height: 1;
+}
+
+.pulse-countdown-unit {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ink-muted, #526B6A);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.pulse-countdown-badge-eligible {
+  background-color: var(--teal-light, #EAF6F3);
+  color: var(--teal, #0F6E56);
+  border: 1px solid var(--teal, #0F6E56);
+  padding: 6px 14px;
+  border-radius: var(--radius-full, 9999px);
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pulse-countdown-badge-ineligible {
+  background-color: var(--sand, #F6F4EE);
+  color: var(--ink-muted, #526B6A);
+  border: 1px solid var(--border, #D7DFDC);
+  padding: 6px 14px;
+  border-radius: var(--radius-full, 9999px);
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.pulse-countdown-info {
+  font-size: 0.875rem;
+  color: var(--ink-muted, #526B6A);
+  margin-top: 8px;
+}
+
+.pulse-countdown-date {
+  font-weight: 600;
+  color: var(--ink, #0B2B2C);
+}
+
+/* ── Blood Type Badge ───────────────────────────────────── */
+.pulse-profile-blood-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--teal-light, #EAF6F3);
+  color: var(--teal, #0F6E56);
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+/* ── Match Cards ────────────────────────────────────────── */
+.pulse-match-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pulse-match-card {
+  border: 1px solid var(--border, #D7DFDC);
+  border-radius: var(--radius-md, 10px);
+  padding: 16px;
+  background: var(--white, #ffffff);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: box-shadow var(--transition-fast, 150ms ease);
+}
+
+.pulse-match-card:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.pulse-match-card--critical {
+  border-left: 4px solid var(--coral, #E0664A);
+}
+
+.pulse-match-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pulse-match-card__hospital {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--ink, #0B2B2C);
+  margin: 0;
+}
+
+.pulse-match-card__city {
+  font-size: 0.85rem;
+  color: var(--ink-muted, #526B6A);
+}
+
+.pulse-match-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.875rem;
+  color: var(--ink-muted, #526B6A);
+}
+
+.pulse-match-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+/* ── Donation History Table ─────────────────────────────── */
+.pulse-table-wrap {
+  overflow-x: auto;
+}
+
+.pulse-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.pulse-table th {
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--border, #D7DFDC);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  color: var(--ink, #0B2B2C);
+}
+
+.pulse-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border-subtle, #E9EFEF);
+  color: var(--ink-light, #164041);
+}
+
+.pulse-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ── Edit Profile Form ──────────────────────────────────── */
+.pulse-form-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .pulse-form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.pulse-toggle-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.pulse-toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  color: var(--ink, #0B2B2C);
+  cursor: pointer;
+}
+
+.pulse-toggle-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--teal, #0F6E56);
+  cursor: pointer;
+}

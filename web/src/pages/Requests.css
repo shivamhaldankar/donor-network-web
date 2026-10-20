@@ -1,0 +1,235 @@
+/* ============================================================
+   Pulse — Requests Page Styles
+   Owner: Member A (Slice 1)
+   Coral is strictly reserved for CRITICAL urgency badges and alerts.
+   ============================================================ */
+
+.pulse-requests-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.pulse-requests-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 24px;
+}
+
+@media (min-width: 992px) {
+  .pulse-requests-grid {
+    grid-template-columns: 380px 1fr;
+  }
+}
+
+/* ── Radio / Type Toggle ────────────────────────────────── */
+.pulse-type-toggle {
+  display: flex;
+  background: var(--sand, #F6F4EE);
+  padding: 4px;
+  border-radius: var(--radius-md, 10px);
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.pulse-type-toggle-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-sm, 6px);
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--ink-muted, #526B6A);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.pulse-type-toggle-btn--active {
+  background: var(--white, #FFFFFF);
+  color: var(--ink, #0B2B2C);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Urgency Selector ───────────────────────────────────── */
+.pulse-urgency-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.pulse-urgency-card {
+  border: 1px solid var(--border, #D7DFDC);
+  border-radius: var(--radius-sm, 6px);
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--white, #ffffff);
+}
+
+.pulse-urgency-card--critical.pulse-urgency-card--selected {
+  border-color: var(--coral, #E0664A);
+  background: var(--coral-light, #FDEEEA);
+  color: var(--coral, #E0664A);
+}
+
+.pulse-urgency-card--moderate.pulse-urgency-card--selected {
+  border-color: var(--warn, #B45309);
+  background: var(--warn-light, #FEF3C7);
+  color: var(--warn, #B45309);
+}
+
+.pulse-urgency-card--low.pulse-urgency-card--selected {
+  border-color: var(--teal, #0F6E56);
+  background: var(--teal-light, #EAF6F3);
+  color: var(--teal, #0F6E56);
+}
+
+/* ── Matched Alert Banner ───────────────────────────────── */
+.pulse-matched-banner {
+  border: 1px solid var(--teal, #0F6E56);
+  background: var(--teal-light, #EAF6F3);
+  border-radius: var(--radius-md, 10px);
+  padding: 18px;
+  margin-bottom: 24px;
+}
+
+.pulse-matched-banner__title {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--teal, #0F6E56);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 8px 0;
+}
+
+.pulse-donor-matches-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.pulse-donor-match-tile {
+  background: var(--white, #FFFFFF);
+  border: 1px solid var(--border, #D7DFDC);
+  border-radius: var(--radius-sm, 6px);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pulse-donor-match-tile__name {
+  font-weight: 600;
+  color: var(--ink, #0B2B2C);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pulse-donor-match-tile__dist {
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: var(--teal, #0F6E56);
+}
+
+.pulse-donor-match-tile__phone {
+  font-size: 0.85rem;
+  color: var(--ink-muted, #526B6A);
+}
+
+/* ── Filter Tabs ────────────────────────────────────────── */
+.pulse-filter-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 16px;
+}
+
+.pulse-filter-tab {
+  padding: 6px 14px;
+  border-radius: var(--radius-full, 9999px);
+  border: 1px solid var(--border, #D7DFDC);
+  background: var(--white, #FFFFFF);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ink-muted, #526B6A);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.pulse-filter-tab--active {
+  background: var(--ink, #0B2B2C);
+  border-color: var(--ink, #0B2B2C);
+  color: var(--white, #FFFFFF);
+}
+
+/* ── Request Card Item ──────────────────────────────────── */
+.pulse-request-item {
+  border: 1px solid var(--border, #D7DFDC);
+  border-radius: var(--radius-md, 10px);
+  padding: 16px;
+  background: var(--white, #FFFFFF);
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: box-shadow var(--transition-fast);
+}
+
+.pulse-request-item:hover {
+  box-shadow: var(--shadow-sm);
+}
+
+.pulse-request-item--critical {
+  border-left: 4px solid var(--coral, #E0664A);
+}
+
+.pulse-request-item__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pulse-request-item__title {
+  font-family: var(--font-heading);
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--ink, #0B2B2C);
+  margin: 0;
+}
+
+.pulse-request-item__badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pulse-request-item__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 0.85rem;
+  color: var(--ink-muted, #526B6A);
+}
+
+.pulse-request-item__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-subtle, #E9EFEF);
+}
