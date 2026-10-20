@@ -1,0 +1,168 @@
+/* ============================================================
+   Pulse Organ Module Stylesheet
+   Owned by Member C (Slice 3: Organ Matching & Dashboards)
+   ============================================================ */
+
+.organ-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Pledge types selector grid */
+.organ-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.organ-type-card {
+  padding: 16px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--sand-card);
+  text-align: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.organ-type-card:hover {
+  border-color: var(--teal);
+  background-color: var(--sand-hover);
+  transform: translateY(-2px);
+}
+
+.organ-type-card.selected {
+  border-color: var(--teal);
+  background-color: var(--teal-light);
+  box-shadow: 0 0 0 2px var(--teal);
+}
+
+.organ-type-card__icon {
+  width: 32px;
+  height: 32px;
+  color: var(--teal);
+}
+
+.organ-type-card__label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+/* Score breakdown bar */
+.score-breakdown-box {
+  background: var(--sand);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  margin-top: 8px;
+}
+
+.score-breakdown-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.score-bar-track {
+  height: 8px;
+  background: var(--border-subtle);
+  border-radius: var(--radius-full);
+  display: flex;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.score-bar-segment {
+  height: 100%;
+  transition: width var(--transition-normal);
+}
+
+.score-bar-segment--urgency {
+  background-color: #0F6E56;
+}
+
+.score-bar-segment--waiting {
+  background-color: #2563EB;
+}
+
+.score-bar-segment--proximity {
+  background-color: #059669;
+}
+
+.score-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 11px;
+  color: var(--ink-muted);
+  margin-top: 8px;
+}
+
+.score-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.score-legend-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+/* Pledge picker list */
+.pledge-picker-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  cursor: pointer;
+  margin-bottom: 10px;
+  transition: all var(--transition-fast);
+}
+
+.pledge-picker-item:hover {
+  background: var(--sand-light);
+  border-color: var(--ink-muted);
+}
+
+.pledge-picker-item.selected {
+  border-color: var(--teal);
+  background: var(--teal-light);
+  box-shadow: 0 0 0 2px var(--teal);
+}
+
+/* Modal overlay */
+.pulse-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(11, 43, 44, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+}
+
+.pulse-modal-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border);
+}
