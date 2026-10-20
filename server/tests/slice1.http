@@ -1,0 +1,216 @@
+### Pulse — Slice 1 API Tests (Member A)
+### VS Code REST Client format
+### Prerequisites: Local server running on port 5000 and database populated with 00, 01, 02, 10, 11, 20
+
+@baseUrl = http://localhost:5000/api
+
+# ─────────────────────────────────────────────────────────────
+# 1. AUTHENTICATION & LOGIN
+# ─────────────────────────────────────────────────────────────
+
+### 1a. Sign in as Hospital Staff (Anita Kulkarni, City Care Hospital, Pune)
+# @name staffLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "STAFF",
+  "email": "staff.citycare@example.com",
+  "password": "Pulse@123"
+}
+
+### Store Staff Token
+@staffToken = {{staffLogin.response.body.token}}
+
+### 1b. Sign in as Donor (Aarav Shah - O+, Pune, eligible)
+# @name aaravLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "Pulse@123"
+}
+
+### Store Aarav Token
+@aaravToken = {{aaravLogin.response.body.token}}
+
+### 1c. Sign in as Donor (Neha Kulkarni - O+, Pune, donated 30 days ago, ineligible)
+# @name nehaLogin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "neha@example.com",
+  "password": "Pulse@123"
+}
+
+### Store Neha Token
+@nehaToken = {{nehaLogin.response.body.token}}
+
+
+# ─────────────────────────────────────────────────────────────
+# 2. DONOR PROFILE & COUNTDOWN (Aarav & Neha)
+# ─────────────────────────────────────────────────────────────
+
+### 2a. GET /donors/me (Aarav - should show is_eligible: true, days_remaining: 0)
+GET {{baseUrl}}/donors/me
+Authorization: Bearer {{aaravToken}}
+
+### 2b. GET /donors/me (Neha - should show is_eligible: false, days_remaining: 60 [T19])
+GET {{baseUrl}}/donors/me
+Authorization: Bearer {{nehaToken}}
+
+### 2c. PUT /donors/me (Aarav updates phone and coordinates)
+PUT {{baseUrl}}/donors/me
+Authorization: Bearer {{aaravToken}}
+Content-Type: application/json
+
+{
+  "phone": "9811119999",
+  "city": "Pune",
+  "latitude": 18.520400,
+  "longitude": 73.856700,
+  "notify_email": true,
+  "notify_sms": true
+}
+
+### 2d. GET /donors/me/donations (Aarav donation history)
+GET {{baseUrl}}/donors/me/donations
+Authorization: Bearer {{aaravToken}}
+
+
+# ─────────────────────────────────────────────────────────────
+# 3. ELIGIBLE DONORS DIRECTORY
+# ─────────────────────────────────────────────────────────────
+
+### 3a. GET /donors/eligible (Staff views eligible directory - no phone/email exposed)
+GET {{baseUrl}}/donors/eligible
+Authorization: Bearer {{staffToken}}
+
+
+# ─────────────────────────────────────────────────────────────
+# 4. BLOOD REQUESTS & MATCHING
+# ─────────────────────────────────────────────────────────────
+
+### 4a. POST /requests (Staff creates CRITICAL O+ blood request, radius 50km)
+### Expected response: 201 { request_id: N, status: "MATCHED", match_count: 3 }
+# @name createCriticalRequest
+POST {{baseUrl}}/requests
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "request_type": "BLOOD",
+  "blood_type_needed": "O+",
+  "urgency": "CRITICAL",
+  "radius_km": 50,
+  "units_needed": 2,
+  "patient_name": "Emergency Patient X"
+}
+
+### Store Request ID
+@createdRequestId = {{createCriticalRequest.response.body.request_id}}
+
+### 4b. GET /requests/:id/matches (Staff lists matched donors nearest-first)
+### Expected order: Aarav (0.0 km), Priya (~8.0 km), Rahul (NULL km, same-city)
+GET {{baseUrl}}/requests/{{createdRequestId}}/matches
+Authorization: Bearer {{staffToken}}
+
+### 4c. GET /requests (Staff views their hospital's requests)
+GET {{baseUrl}}/requests
+Authorization: Bearer {{staffToken}}
+
+### 4d. GET /requests?status=MATCHED (Staff filters by MATCHED status)
+GET {{baseUrl}}/requests?status=MATCHED
+Authorization: Bearer {{staffToken}}
+
+### 4e. GET /requests/critical (Staff views open critical requests)
+GET {{baseUrl}}/requests/critical
+Authorization: Bearer {{staffToken}}
+
+
+# ─────────────────────────────────────────────────────────────
+# 5. MATCH NOTIFICATION & DONOR RESPONSE [T22]
+# ─────────────────────────────────────────────────────────────
+
+### 5a. GET /donors/me/matches (Aarav views matches received)
+# @name getAaravMatches
+GET {{baseUrl}}/donors/me/matches
+Authorization: Bearer {{aaravToken}}
+
+### Store Aarav's Match ID
+@aaravMatchId = {{getAaravMatches.response.body[0].match_id}}
+
+### 5b. POST /matches/:id/respond (Aarav responds ACCEPTED to match [T22])
+### Expected response: { match_id, contacted_status: "ACCEPTED", responded_on }
+POST {{baseUrl}}/matches/{{aaravMatchId}}/respond
+Authorization: Bearer {{aaravToken}}
+Content-Type: application/json
+
+{
+  "response": "ACCEPTED"
+}
+
+
+# ─────────────────────────────────────────────────────────────
+# 6. LOGGING DONATIONS & ELIGIBILITY ENFORCEMENT
+# ─────────────────────────────────────────────────────────────
+
+### 6a. POST /donations (Attempt donation for Neha - ineligible, donated 30 days ago)
+### Expected response: 409 { error: "...", code: "DONOR_NOT_ELIGIBLE" }
+POST {{baseUrl}}/donations
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "donor_id": 6,
+  "donation_type": "BLOOD",
+  "units": 1
+}
+
+### 6b. POST /donations (Valid donation by Aarav linked to request)
+### Expected response: 201 { donation_id: N }
+### Database trigger marks Aarav ineligible and marks request FULFILLED automatically.
+POST {{baseUrl}}/donations
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "donor_id": 1,
+  "request_id": {{createdRequestId}},
+  "donation_type": "BLOOD",
+  "units": 1
+}
+
+### 6c. Verify Request is now FULFILLED
+GET {{baseUrl}}/requests?status=FULFILLED
+Authorization: Bearer {{staffToken}}
+
+
+# ─────────────────────────────────────────────────────────────
+# 7. CANCEL REQUEST
+# ─────────────────────────────────────────────────────────────
+
+### 7a. POST /requests (Create a MODERATE request to test cancellation)
+# @name createCancelRequest
+POST {{baseUrl}}/requests
+Authorization: Bearer {{staffToken}}
+Content-Type: application/json
+
+{
+  "request_type": "BLOOD",
+  "blood_type_needed": "A+",
+  "urgency": "MODERATE",
+  "radius_km": 50,
+  "patient_name": "Patient for Cancel Test"
+}
+
+@cancelRequestId = {{createCancelRequest.response.body.request_id}}
+
+### 7b. PATCH /requests/:id/cancel (Staff cancels open request)
+### Expected response: { request_id: N, status: "CANCELLED" }
+PATCH {{baseUrl}}/requests/{{cancelRequestId}}/cancel
+Authorization: Bearer {{staffToken}}
