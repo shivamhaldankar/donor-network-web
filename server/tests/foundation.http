@@ -1,0 +1,108 @@
+### Pulse — Foundation acceptance tests (Phase B1)
+### Run with VS Code REST Client (humao.rest-client).
+
+@baseUrl = http://localhost:5000/api
+
+### Health check — must return 200 { status: "ok" }
+GET {{baseUrl}}/health
+
+###
+
+### Sign up as new donor
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "name": "Foundation Test Donor",
+  "email": "foundation.donor@test.com",
+  "password": "Test@123",
+  "phone": "9000099999",
+  "blood_type": "B+",
+  "city": "Pune",
+  "latitude": 18.5204,
+  "longitude": 73.8567
+}
+
+###
+
+### Sign up as new staff
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "role": "STAFF",
+  "name": "Foundation Test Staff",
+  "email": "foundation.staff@test.com",
+  "password": "Test@123",
+  "hospital_id": 1,
+  "staff_role": "Tester"
+}
+
+###
+
+### Login as seeded staff (City Care)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "STAFF",
+  "email": "staff.citycare@example.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### Login as seeded donor (Aarav — password Pulse@123)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### Login as admin (npm run seed:admin must have been run)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "ADMIN",
+  "email": "admin@pulse.test",
+  "password": "Admin@123"
+}
+
+###
+
+### T6 — Wrong password → 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "WRONG"
+}
+
+###
+
+### T7 — No token → 401
+GET {{baseUrl}}/auth/me
+
+###
+
+### T5 — Duplicate email → 409
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "name": "Duplicate",
+  "email": "aarav@example.com",
+  "password": "Test@123",
+  "phone": "9000000000",
+  "blood_type": "O+"
+}

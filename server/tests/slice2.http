@@ -1,0 +1,269 @@
+### Pulse — Slice 2 HTTP tests
+### Run with the VS Code "REST Client" extension (humao.rest-client).
+### Set @token variables after login by copying the token from the response.
+###
+### Pre-requisites:
+###   - npm run dev (server running on port 5000)
+###   - npm run seed:admin (admin account created)
+###   - Database rebuilt with 00–02 + 20_audit_notifications.sql
+
+@baseUrl = http://localhost:5000/api
+
+### ── Variables (fill in after running the login requests below) ──────────────
+@donorToken  = PASTE_DONOR_TOKEN_HERE
+@staffToken  = PASTE_STAFF_TOKEN_HERE
+@adminToken  = PASTE_ADMIN_TOKEN_HERE
+
+# =============================================================================
+# PHASE B1 — Auth & hospitals
+# =============================================================================
+
+### T_HEALTH — Server health check
+GET {{baseUrl}}/health
+
+###
+
+### T5 — Signup as donor (first time)
+# @name signupDonor
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "name": "Test Donor",
+  "email": "testdonor@test.com",
+  "password": "Test@123",
+  "phone": "9000000001",
+  "blood_type": "A+"
+}
+
+###
+
+### T5 — Duplicate email → 409
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "name": "Test Donor Again",
+  "email": "testdonor@test.com",
+  "password": "Test@123",
+  "phone": "9000000001",
+  "blood_type": "A+"
+}
+
+###
+
+### Login as seeded donor (Aarav)
+# @name loginAarav
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### Login as seeded staff (City Care — verified hospital)
+# @name loginStaff
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "STAFF",
+  "email": "staff.citycare@example.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### Login as admin (created by seed:admin)
+# @name loginAdmin
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "ADMIN",
+  "email": "admin@pulse.test",
+  "password": "Admin@123"
+}
+
+###
+
+### T6 — Wrong password → 401
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "wrongpassword"
+}
+
+###
+
+### T6 — Unknown email → 401 (SAME message as wrong password)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "nobody@nowhere.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### T7 — No token → 401
+GET {{baseUrl}}/auth/me
+
+###
+
+### GET /auth/me with valid token
+GET {{baseUrl}}/auth/me
+Authorization: Bearer {{donorToken}}
+
+###
+
+### Public hospital list (no auth needed)
+GET {{baseUrl}}/hospitals
+
+###
+
+# =============================================================================
+# PHASE B3 — Admin routes
+# =============================================================================
+
+### T11 — Donor calling /admin/stats → 403
+GET {{baseUrl}}/admin/stats
+Authorization: Bearer {{donorToken}}
+
+###
+
+### T11 — Staff calling /admin/stats → 403
+GET {{baseUrl}}/admin/stats
+Authorization: Bearer {{staffToken}}
+
+###
+
+### Admin stats (should return 200 with counts)
+GET {{baseUrl}}/admin/stats
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Admin user list
+GET {{baseUrl}}/admin/users
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Admin audit log
+GET {{baseUrl}}/admin/audit?limit=20
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Admin notification queue health
+GET {{baseUrl}}/admin/notifications
+Authorization: Bearer {{adminToken}}
+
+###
+
+### Verify hospital 4 (New Hope — seeded as unverified)
+PATCH {{baseUrl}}/hospitals/4/verify
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "verified": true
+}
+
+###
+
+### Unverify hospital 4 again
+PATCH {{baseUrl}}/hospitals/4/verify
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "verified": false
+}
+
+###
+
+### T10 — Staff of unverified hospital (New Hope) should get 403 on /requests
+### (requires Member A's routes/requests.js to be merged)
+### Login first as staff.newhope@example.com, use that token here.
+# POST {{baseUrl}}/requests
+# Authorization: Bearer NEWHOPE_STAFF_TOKEN_HERE
+# Content-Type: application/json
+# { "request_type": "BLOOD", "blood_type_needed": "O+", "urgency": "MODERATE" }
+
+###
+
+### T12 — Deactivate donor 1 (Aarav), then try to log in
+PATCH {{baseUrl}}/admin/users/donor/1/active
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "is_active": false
+}
+
+###
+
+### T12 — Deactivated donor login attempt → 403
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "role": "DONOR",
+  "email": "aarav@example.com",
+  "password": "Pulse@123"
+}
+
+###
+
+### Reactivate donor 1 after the test
+PATCH {{baseUrl}}/admin/users/donor/1/active
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "is_active": true
+}
+
+###
+
+### Run eligibility restore job manually
+POST {{baseUrl}}/admin/jobs/restore-eligibility
+Authorization: Bearer {{adminToken}}
+
+###
+
+# =============================================================================
+# Notifications (donor)
+# =============================================================================
+
+### GET /notifications/me (donor)
+GET {{baseUrl}}/notifications/me
+Authorization: Bearer {{donorToken}}
+
+###
+
+### Non-donor (staff) trying /notifications/me → 403
+GET {{baseUrl}}/notifications/me
+Authorization: Bearer {{staffToken}}
+
+###
+
+### T8 — Donor calling POST /requests → 403
+### (uncomment once Member A's routes/requests.js is merged)
+# POST {{baseUrl}}/requests
+# Authorization: Bearer {{donorToken}}
+# Content-Type: application/json
+# { "request_type": "BLOOD", "blood_type_needed": "O+", "urgency": "CRITICAL" }
