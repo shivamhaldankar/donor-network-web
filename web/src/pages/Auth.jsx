@@ -1,436 +1,478 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import {
-  Heart,
-  Building2,
-  Lock,
-  Mail,
-  User,
-  Phone,
-  MapPin,
-  CheckCircle2,
-  Sparkles,
-  AlertCircle,
-  ArrowRight
-} from 'lucide-react';
+// ============================================================
+// Pulse Authentication Page
+// Owned by Member C (Web foundation)
+// Contract §5, §6:
+//   - Sign In / Sign Up tabs
+//   - Donor / Hospital Staff toggle
+//   - Small "Admin sign in" link (no public sign-up for Admin)
+//   - Donor sign-up fields: name, email, password, phone, blood_type, city, LocationPicker
+//   - Staff sign-up fields: name, email, password, hospital dropdown (GET /hospitals), staff_role
+//   - Show server errors inline
+//   - Calls POST /auth/signup and POST /auth/login
+//   - VITE_DEV_FAKE_AUTH=true dev shortcut
+// ============================================================
 
-export default function Auth({ onAuth }) {
-  const { login, signup, loginAsDemo, loading } = useAuth();
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import { api } from '../api/client';
+import { ErrorBox, Spinner } from '../components/ui';
+import { LocationPicker } from '../components/LocationPicker';
+import './Auth.css';
+
+const BLOOD_TYPES = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
+
+// Dev fake accounts based on seed data
+const DEV_FAKE_USERS = [
+  {
+    label: 'Aarav (Donor, O+)',
+    token: 'fake-jwt-token-donor-1',
+    user: { id: 1, role: 'DONOR', name: 'Aarav Shah', email: 'aarav@example.com' },
+  },
+  {
+    label: 'Priya (Donor, O+)',
+    token: 'fake-jwt-token-donor-2',
+    user: { id: 2, role: 'DONOR', name: 'Priya Nair', email: 'priya@example.com' },
+  },
+  {
+    label: 'Anita (Staff, City Care)',
+    token: 'fake-jwt-token-staff-1',
+    user: { id: 1, role: 'STAFF', name: 'Anita Kulkarni', hospital_id: 1, email: 'staff.citycare@example.com' },
+  },
+  {
+    label: 'Farhan (Staff, Sunrise)',
+    token: 'fake-jwt-token-staff-2',
+    user: { id: 2, role: 'STAFF', name: 'Farhan Qureshi', hospital_id: 2, email: 'staff.sunrise@example.com' },
+  },
+  {
+    label: 'Admin (System)',
+    token: 'fake-jwt-token-admin',
+    user: { id: 1, role: 'ADMIN', name: 'System Admin', email: 'admin@pulse.test' },
+  },
+];
+
+export function Auth() {
+  const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  const from = location.state?.from?.pathname || '/donors';
+  const [mode, setMode] = useState('signin'); // 'signin' | 'signup'
+  const [role, setRole] = useState('DONOR'); // 'DONOR' | 'STAFF' | 'ADMIN'
+  const [isAdminMode, setIsAdminMode] = useState(false);
 
-  const [mode, setMode] = useState('login'); // 'login' | 'signup'
-  const [role, setRole] = useState('DONOR'); // 'DONOR' | 'STAFF'
-
-  // Form states
+  // Common fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [bloodGroup, setBloodGroup] = useState('O+');
-  const [city, setCity] = useState('');
-  const [hospitalName, setHospitalName] = useState('');
-  const [department, setDepartment] = useState('Blood Bank & Emergency');
-  const [employeeId, setEmployeeId] = useState('');
-  const [pledges, setPledges] = useState(['Blood']);
-  const [error, setError] = useState('');
 
-  const togglePledge = (pledge) => {
-    setPledges((prev) =>
-      prev.includes(pledge) ? prev.filter((p) => p !== pledge) : [...prev, pledge]
-    );
+  // Donor fields
+  const [phone, setPhone] = useState('');
+  const [bloodType, setBloodType] = useState('O+');
+  const [city, setCity] = useState('');
+  const [coords, setCoords] = useState({ latitude: null, longitude: null });
+
+  // Staff fields
+  const [hospitalId, setHospitalId] = useState('');
+  const [staffRole, setStaffRole] = useState('Coordinator');
+  const [hospitals, setHospitals] = useState([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(false);
+
+  // State feedback
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const isDevFakeAuth = import.meta.env.VITE_DEV_FAKE_AUTH === 'true';
+
+  // Load hospitals for staff signup dropdown
+  useEffect(() => {
+    let isMounted = true;
+    if (mode === 'signup' && role === 'STAFF') {
+      setLoadingHospitals(true);
+      api.get('/hospitals')
+        .then((data) => {
+          if (!isMounted) return;
+          const list = Array.isArray(data) ? data : [];
+          setHospitals(list);
+          if (list.length > 0 && !hospitalId) {
+            setHospitalId(list[0].hospital_id);
+          }
+        })
+        .catch((err) => {
+          if (isMounted) {
+            console.warn('Could not load hospitals list', err);
+            // Fallback seed hospitals if backend isn't up yet
+            setHospitals([
+              { hospital_id: 1, name: 'City Care Hospital', city: 'Pune', verified: true },
+              { hospital_id: 2, name: 'Sunrise Medical Center', city: 'Mumbai', verified: true },
+              { hospital_id: 3, name: 'Lifeline Hospital', city: 'Pune', verified: true },
+              { hospital_id: 4, name: 'New Hope Clinic', city: 'Nashik', verified: false },
+            ]);
+            setHospitalId(1);
+          }
+        })
+        .finally(() => {
+          if (isMounted) setLoadingHospitals(false);
+        });
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [mode, role]);
+
+  const handleDevLogin = (fake) => {
+    login({ token: fake.token, user: fake.user });
+    navigate(fake.user.role === 'ADMIN' ? '/admin' : '/', { replace: true });
   };
 
-  const handleDemoLogin = (demoRole) => {
-    loginAsDemo(demoRole);
-    if (onAuth) onAuth({ role: demoRole === 'donor' ? 'DONOR' : 'STAFF' });
-    navigate(demoRole === 'donor' ? '/donors' : '/requests', { replace: true });
+  const handleSwitchToAdmin = () => {
+    setIsAdminMode(true);
+    setRole('ADMIN');
+    setMode('signin');
+    setError(null);
+  };
+
+  const handleSwitchToUser = (targetRole = 'DONOR') => {
+    setIsAdminMode(false);
+    setRole(targetRole);
+    setError(null);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
+    setError(null);
+    setLoading(true);
 
     try {
-      let authUser;
-      if (mode === 'login') {
-        if (!email) {
-          setError('Please enter your email address');
-          return;
-        }
-        authUser = await login({ email, password, role });
-      } else {
-        if (!name.trim()) {
-          setError('Please enter your full name');
-          return;
-        }
-        if (!email.trim()) {
-          setError('Please enter an email address');
-          return;
-        }
-
-        const userData = {
-          name,
-          email,
+      let result;
+      if (mode === 'signin') {
+        result = await api.post('/auth/login', {
           role,
-          phone,
-          ...(role === 'DONOR'
-            ? { bloodGroup, city, pledges }
-            : { hospitalName, department, employeeId }),
-        };
-        authUser = await signup(userData);
+          email: email.trim(),
+          password,
+        });
+      } else {
+        // Sign up
+        if (role === 'DONOR') {
+          result = await api.post('/auth/signup', {
+            role: 'DONOR',
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            phone: phone.trim(),
+            blood_type: bloodType,
+            city: city.trim() || undefined,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          });
+        } else {
+          // STAFF
+          result = await api.post('/auth/signup', {
+            role: 'STAFF',
+            name: name.trim(),
+            email: email.trim(),
+            password,
+            hospital_id: parseInt(hospitalId, 10),
+            staff_role: staffRole.trim() || undefined,
+          });
+        }
       }
 
-      if (onAuth) onAuth(authUser);
-      navigate(from, { replace: true });
+      // Persist auth and navigate
+      if (result && result.token && result.user) {
+        login({ token: result.token, user: result.user });
+        const from = location.state?.from?.pathname;
+        const target = from || (result.user.role === 'ADMIN' ? '/admin' : '/');
+        navigate(target, { replace: true });
+      } else {
+        throw new Error('Server returned an unexpected response format');
+      }
     } catch (err) {
-      setError(err?.message || 'Authentication failed. Please try again.');
+      setError(err);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-slate-50 via-slate-100/50 to-slate-50">
-      <div className="w-full max-w-lg">
-        {/* Quick Demo Login Banner */}
-        <div className="mb-6 p-4 rounded-2xl bg-gradient-to-r from-rose-500/10 via-amber-500/10 to-indigo-500/10 border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-2 mb-2 text-xs font-semibold uppercase tracking-wider text-slate-700">
-            <Sparkles className="w-4 h-4 text-amber-500" />
-            <span>Instant Demo Logins</span>
+    <div className="pulse-auth-container">
+      <div className="pulse-auth-card">
+        {/* Brand Header */}
+        <div className="pulse-auth-brand">
+          <div className="pulse-auth-brand__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ width: 24, height: 24 }}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            </svg>
           </div>
-          <div className="grid grid-cols-2 gap-2.5">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('donor')}
-              className="flex items-center justify-between p-2.5 text-left rounded-xl bg-white hover:bg-rose-50/70 border border-slate-200 hover:border-rose-300 text-xs transition-all group"
-            >
-              <div>
-                <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500/20" />
-                  Rahul (Donor)
-                </span>
-                <span className="text-[11px] text-slate-500 block">O+ Universal Blood</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-rose-600 transition-transform group-hover:translate-x-0.5" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('staff')}
-              className="flex items-center justify-between p-2.5 text-left rounded-xl bg-white hover:bg-indigo-50/70 border border-slate-200 hover:border-indigo-300 text-xs transition-all group"
-            >
-              <div>
-                <span className="font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                  Dr. Priya (Staff)
-                </span>
-                <span className="text-[11px] text-slate-500 block">Apollo City Hospital</span>
-              </div>
-              <ArrowRight className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 transition-transform group-hover:translate-x-0.5" />
-            </button>
-          </div>
+          <h1 className="pulse-auth-brand__title">Pulse</h1>
+          <p className="pulse-auth-brand__subtitle">
+            Real-Time Blood & Organ Donor Availability Network
+          </p>
         </div>
 
-        {/* Main Auth Card */}
-        <div className="bg-white rounded-3xl border border-slate-200/80 shadow-xl shadow-slate-200/50 p-6 sm:p-8">
-          {/* Role Tabs */}
-          <div className="text-center mb-6">
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight">
-              {mode === 'login' ? 'Welcome Back' : 'Join the Network'}
-            </h1>
-            <p className="text-sm text-slate-500 mt-1">
-              Select your role and proceed to access emergency donor coordination
-            </p>
+        {/* Dev fake auth shortcut */}
+        {isDevFakeAuth && (
+          <div className="pulse-dev-auth-banner">
+            <div className="pulse-dev-auth-title">
+              <svg viewBox="0 0 20 20" fill="currentColor" style={{ width: 14, height: 14 }}>
+                <path fillRule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clipRule="evenodd" />
+              </svg>
+              <span>Dev Quick Sign-In (VITE_DEV_FAKE_AUTH)</span>
+            </div>
+            <div className="pulse-dev-auth-buttons">
+              {DEV_FAKE_USERS.map((fake) => (
+                <button
+                  key={fake.label}
+                  type="button"
+                  onClick={() => handleDevLogin(fake)}
+                  className="pulse-dev-btn"
+                >
+                  {fake.label}
+                </button>
+              ))}
+            </div>
           </div>
+        )}
 
-          <div className="grid grid-cols-2 gap-2 p-1.5 bg-slate-100 rounded-2xl mb-6">
+        {/* Mode Tabs (Sign In / Sign Up) - Hidden in Admin Mode */}
+        {!isAdminMode ? (
+          <div className="pulse-auth-tabs">
             <button
               type="button"
-              onClick={() => setRole('DONOR')}
-              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                role === 'DONOR'
-                  ? 'bg-white text-rose-700 shadow-xs ring-1 ring-slate-900/5'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Heart className={`w-4 h-4 ${role === 'DONOR' ? 'fill-rose-500 text-rose-500' : ''}`} />
-              <span>I'm a Donor</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setRole('STAFF')}
-              className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
-                role === 'STAFF'
-                  ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-900/5'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Building2 className="w-4 h-4" />
-              <span>Hospital Staff</span>
-            </button>
-          </div>
-
-          {/* Mode Switcher */}
-          <div className="flex border-b border-slate-200 mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('login');
-                setError('');
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold text-center border-b-2 transition-colors ${
-                mode === 'login'
-                  ? 'border-rose-600 text-rose-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
+              className={`pulse-auth-tab ${mode === 'signin' ? 'active' : ''}`}
+              onClick={() => { setMode('signin'); setError(null); }}
             >
               Sign In
             </button>
             <button
               type="button"
-              onClick={() => {
-                setMode('signup');
-                setError('');
-              }}
-              className={`flex-1 pb-3 text-sm font-semibold text-center border-b-2 transition-colors ${
-                mode === 'signup'
-                  ? 'border-rose-600 text-rose-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
+              className={`pulse-auth-tab ${mode === 'signup' ? 'active' : ''}`}
+              onClick={() => { setMode('signup'); setError(null); }}
             >
-              Create Account
+              Sign Up
             </button>
           </div>
+        ) : (
+          <div style={{ textAlign: 'center', marginBottom: 18 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--coral)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Administrator Authentication
+            </span>
+          </div>
+        )}
 
-          {error && (
-            <div className="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{error}</span>
+        {/* Role Toggle (Donor / Hospital Staff) - Hidden in Admin Mode */}
+        {!isAdminMode && (
+          <div className="pulse-role-toggle">
+            <button
+              type="button"
+              className={`pulse-role-btn ${role === 'DONOR' ? 'active' : ''}`}
+              onClick={() => { setRole('DONOR'); setError(null); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" />
+              </svg>
+              <span>Donor</span>
+            </button>
+            <button
+              type="button"
+              className={`pulse-role-btn ${role === 'STAFF' ? 'active' : ''}`}
+              onClick={() => { setRole('STAFF'); setError(null); }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: 16, height: 16 }}>
+                <rect x="4" y="2" width="16" height="20" rx="2" />
+                <path d="M9 22v-4h6v4" />
+                <path d="M8 6h.01M16 6h.01M12 6h.01M8 10h.01M16 10h.01M12 10h.01M8 14h.01M16 14h.01M12 14h.01" />
+              </svg>
+              <span>Hospital Staff</span>
+            </button>
+          </div>
+        )}
+
+        {/* Inline Server Error Box */}
+        {error && <ErrorBox message={error} />}
+
+        {/* Auth Form */}
+        <form onSubmit={handleSubmit} noValidate>
+          {/* Sign Up Fields: Full Name */}
+          {mode === 'signup' && (
+            <div className="form-group">
+              <label htmlFor="auth-name" className="form-label">Full Name</label>
+              <input
+                id="auth-name"
+                type="text"
+                autoComplete="name"
+                required
+                className="input-control"
+                placeholder="e.g. Ramesh Patil"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Email Address */}
+          <div className="form-group">
+            <label htmlFor="auth-email" className="form-label">Email Address</label>
+            <input
+              id="auth-email"
+              type="email"
+              autoComplete="email"
+              required
+              className="input-control"
+              placeholder="e.g. user@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
+
+          {/* Password */}
+          <div className="form-group">
+            <label htmlFor="auth-password" className="form-label">Password</label>
+            <input
+              id="auth-password"
+              type="password"
+              autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+              required
+              minLength={6}
+              className="input-control"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
             {mode === 'signup' && (
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                  Full Name
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={role === 'DONOR' ? 'e.g. Rahul Sharma' : 'e.g. Dr. Priya Patel'}
-                    className="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
-                  />
-                </div>
-              </div>
+              <span className="form-helper">Must be at least 6 characters</span>
             )}
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                Email Address
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Mail className="w-4 h-4" />
-                </div>
+          {/* Donor-specific sign-up fields */}
+          {mode === 'signup' && role === 'DONOR' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="auth-phone" className="form-label">Phone Number</label>
                 <input
-                  type="email"
+                  id="auth-phone"
+                  type="tel"
+                  autoComplete="tel"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder={role === 'DONOR' ? 'donor@network.org' : 'staff@hospital.org'}
-                  className="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  className="input-control"
+                  placeholder="e.g. 9811000001"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                 />
               </div>
-            </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                  <Lock className="w-4 h-4" />
-                </div>
+              <div className="form-group">
+                <label htmlFor="auth-blood-type" className="form-label">Blood Type</label>
+                <select
+                  id="auth-blood-type"
+                  className="select-control"
+                  value={bloodType}
+                  onChange={(e) => setBloodType(e.target.value)}
+                >
+                  {BLOOD_TYPES.map((bt) => (
+                    <option key={bt} value={bt}>{bt}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="auth-city" className="form-label">City (Optional)</label>
                 <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full pl-10 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500 transition-all"
+                  id="auth-city"
+                  type="text"
+                  autoComplete="address-level2"
+                  className="input-control"
+                  placeholder="e.g. Pune, Mumbai"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
                 />
               </div>
-            </div>
 
-            {/* Extra fields for Donor signup */}
-            {mode === 'signup' && role === 'DONOR' && (
-              <>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Blood Group
-                    </label>
-                    <select
-                      value={bloodGroup}
-                      onChange={(e) => setBloodGroup(e.target.value)}
-                      className="w-full py-2.5 px-3 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                    >
-                      {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((bg) => (
-                        <option key={bg} value={bg}>
-                          {bg}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+              <LocationPicker
+                value={coords}
+                onChange={setCoords}
+              />
+            </>
+          )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Phone Number
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                        <Phone className="w-3.5 h-3.5" />
-                      </div>
-                      <input
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        placeholder="+91 98765..."
-                        className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                      />
-                    </div>
-                  </div>
-                </div>
+          {/* Staff-specific sign-up fields */}
+          {mode === 'signup' && role === 'STAFF' && (
+            <>
+              <div className="form-group">
+                <label htmlFor="auth-hospital" className="form-label">Affiliated Hospital</label>
+                {loadingHospitals ? (
+                  <div style={{ padding: '8px 0' }}><Spinner size="sm" label="Loading hospitals..." /></div>
+                ) : (
+                  <select
+                    id="auth-hospital"
+                    className="select-control"
+                    value={hospitalId}
+                    onChange={(e) => setHospitalId(e.target.value)}
+                    required
+                  >
+                    {hospitals.map((h) => (
+                      <option key={h.hospital_id} value={h.hospital_id}>
+                        {h.name} ({h.city}) {!h.verified ? '— Pending Verification' : ''}
+                      </option>
+                    ))}
+                  </select>
+                )}
+                <span className="form-helper">
+                  Note: Staff of unverified hospitals cannot create requests until approved by Admin.
+                </span>
+              </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    City / Location
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <MapPin className="w-3.5 h-3.5" />
-                    </div>
-                    <input
-                      type="text"
-                      value={city}
-                      onChange={(e) => setCity(e.target.value)}
-                      placeholder="e.g. Mumbai, Maharashtra"
-                      className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-rose-500/20 focus:border-rose-500"
-                    />
-                  </div>
-                </div>
+              <div className="form-group">
+                <label htmlFor="auth-staff-role" className="form-label">Staff Role / Title</label>
+                <input
+                  id="auth-staff-role"
+                  type="text"
+                  className="input-control"
+                  placeholder="e.g. Coordinator, Nurse, Transfusion Specialist"
+                  value={staffRole}
+                  onChange={(e) => setStaffRole(e.target.value)}
+                />
+              </div>
+            </>
+          )}
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Willing to Donate (Pledge)
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {['Blood', 'Platelets', 'Kidney', 'Liver (Partial)', 'Eye/Cornea'].map((item) => {
-                      const selected = pledges.includes(item);
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          onClick={() => togglePledge(item)}
-                          className={`text-xs px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 ${
-                            selected
-                              ? 'bg-rose-50 border-rose-300 text-rose-700 font-medium'
-                              : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
-                          }`}
-                        >
-                          {selected && <CheckCircle2 className="w-3 h-3 text-rose-500" />}
-                          {item}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </>
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary pulse-auth-submit"
+          >
+            {loading ? (
+              <Spinner size="sm" label={mode === 'signin' ? 'Signing in...' : 'Registering...'} />
+            ) : (
+              mode === 'signin'
+                ? `Sign In as ${isAdminMode ? 'Admin' : role === 'DONOR' ? 'Donor' : 'Staff'}`
+                : `Create ${role === 'DONOR' ? 'Donor' : 'Staff'} Account`
             )}
+          </button>
+        </form>
 
-            {/* Extra fields for Staff signup */}
-            {mode === 'signup' && role === 'STAFF' && (
-              <>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                    Hospital / Medical Facility
-                  </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-                      <Building2 className="w-3.5 h-3.5" />
-                    </div>
-                    <input
-                      type="text"
-                      required
-                      value={hospitalName}
-                      onChange={(e) => setHospitalName(e.target.value)}
-                      placeholder="e.g. Apollo Memorial Hospital"
-                      className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Department
-                    </label>
-                    <input
-                      type="text"
-                      value={department}
-                      onChange={(e) => setDepartment(e.target.value)}
-                      placeholder="Emergency / ICU"
-                      className="w-full py-2.5 px-3 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-                      Staff / Emp ID
-                    </label>
-                    <input
-                      type="text"
-                      value={employeeId}
-                      onChange={(e) => setEmployeeId(e.target.value)}
-                      placeholder="EMP-4421"
-                      className="w-full py-2.5 px-3 text-sm bg-slate-50/50 border border-slate-200 rounded-xl focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
-                    />
-                  </div>
-                </div>
-              </>
-            )}
-
+        {/* Footer with Admin Sign In toggle */}
+        <div className="pulse-auth-footer">
+          {!isAdminMode ? (
             <button
-              type="submit"
-              disabled={loading}
-              className={`w-full py-3 px-4 rounded-xl text-white font-semibold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
-                role === 'DONOR'
-                  ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-500/25'
-                  : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-500/25'
-              } disabled:opacity-50`}
+              type="button"
+              onClick={handleSwitchToAdmin}
+              className="pulse-admin-link"
             >
-              {loading ? (
-                <span>Processing...</span>
-              ) : (
-                <>
-                  <span>
-                    {mode === 'login'
-                      ? `Sign In as ${role === 'DONOR' ? 'Donor' : 'Staff'}`
-                      : `Complete ${role === 'DONOR' ? 'Donor' : 'Staff'} Registration`}
-                  </span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
+              Administrator Sign In
             </button>
-          </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => handleSwitchToUser('DONOR')}
+              className="pulse-admin-link"
+            >
+              ← Back to Donor / Staff Portal
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 }
+
+export default Auth;

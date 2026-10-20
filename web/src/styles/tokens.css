@@ -1,0 +1,68 @@
+/* ============================================================
+   Pulse Design Tokens
+   Owned by Member C (Web foundation)
+   Colors:
+     Ink:         #0B2B2C (text, sidebar, dark accents)
+     Teal:        #0F6E56 (primary actions, eligible/OK states, countdown)
+     Teal Light:  #EAF6F3 (backgrounds, badges)
+     Coral:       #E0664A (CRITICAL / URGENT STATES ONLY)
+     Sand:        #F6F4EE (app background, subtle containers)
+   Typography:
+     Headings:    Space Grotesk
+     Body:        Inter
+   ============================================================ */
+
+:root {
+  /* Brand colors */
+  --ink: #0B2B2C;
+  --ink-light: #164041;
+  --ink-muted: #526B6A;
+  --ink-subtle: #7A9392;
+
+  --teal: #0F6E56;
+  --teal-hover: #0b5945;
+  --teal-active: #084535;
+  --teal-light: #EAF6F3;
+  --teal-surface: #D8EFEA;
+
+  /* Alert Coral - STRICT RULE: Reserved strictly for critical / urgent alerts */
+  --coral: #E0664A;
+  --coral-hover: #c9563c;
+  --coral-light: #FDEEEA;
+  --coral-border: #F7B8A9;
+
+  /* Warn tone (amber) */
+  --warn: #B45309;
+  --warn-light: #FEF3C7;
+  --warn-border: #FCD34D;
+
+  /* Neutrals & Surfaces */
+  --sand: #F6F4EE;
+  --sand-card: #FFFFFF;
+  --sand-hover: #EFECE3;
+  --white: #FFFFFF;
+
+  --border: #D7DFDC;
+  --border-focus: #0F6E56;
+  --border-subtle: #E9EFEF;
+
+  /* Typography */
+  --font-heading: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Radii */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(11, 43, 44, 0.05);
+  --shadow-md: 0 4px 12px rgba(11, 43, 44, 0.08);
+  --shadow-lg: 0 12px 28px rgba(11, 43, 44, 0.12);
+
+  /* Transitions */
+  --transition-fast: 150ms ease-in-out;
+  --transition-normal: 220ms ease-in-out;
+}
