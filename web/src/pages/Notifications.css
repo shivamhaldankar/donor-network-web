@@ -1,0 +1,81 @@
+/* ============================================================
+   Pulse Donor Notifications Stylesheet
+   Owned by Member B (Phase B4: Frontend UI)
+   Uses design tokens from tokens.css
+   Coral STRICTLY reserved for failed notifications
+   ============================================================ */
+
+.notifications-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.notifications-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notification-card {
+  background-color: var(--sand-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.notification-card:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--teal);
+}
+
+.notification-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.notification-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.notification-card__time {
+  font-size: 12px;
+  color: var(--ink-subtle);
+  white-space: nowrap;
+}
+
+.notification-card__subject {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.notification-card__body {
+  font-size: 14px;
+  color: var(--ink-light);
+  line-height: 1.5;
+  background-color: var(--sand);
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.notification-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--ink-muted);
+  margin-top: 4px;
+}
