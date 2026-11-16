@@ -23,11 +23,25 @@ const app = express();
 app.use(cors());
 app.use(express.json()); // parse application/json request bodies
 
-// ── Health check ──────────────────────────────────────────────────────────────
+// ── Health check & Root info ──────────────────────────────────────────────────
 // A simple ping that teammates and CI can use to verify the server is up.
 // No auth required.
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', ts: new Date().toISOString() });
+});
+
+// Root route (friendly status when accessing backend directly)
+app.get('/', (_req, res, next) => {
+  const clientDist = path.join(__dirname, '../web/dist');
+  if (fs.existsSync(clientDist)) {
+    return next(); // Let static handler serve React index.html
+  }
+  res.json({
+    service: 'Pulse Blood & Organ Donor Network API',
+    status: 'online',
+    health: '/api/health',
+    endpoints: '/api/*'
+  });
 });
 
 // ── Auto-mount routes ─────────────────────────────────────────────────────────
