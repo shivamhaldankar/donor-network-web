@@ -46,6 +46,19 @@ if (fs.existsSync(routesDir)) {
     });
 }
 
+// ── Serve frontend static assets (if built) ──────────────────────────────────
+// Allows deploying both backend and frontend together as a single service.
+const clientDist = path.join(__dirname, '../web/dist');
+if (fs.existsSync(clientDist)) {
+  app.use(express.static(clientDist));
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
+      return next();
+    }
+    res.sendFile(path.join(clientDist, 'index.html'));
+  });
+}
+
 // ── Central error handler ─────────────────────────────────────────────────────
 // Express calls this when a route calls next(err) or asyncHandler catches a throw.
 // We map PostgreSQL error codes to meaningful HTTP responses so routes can stay thin

@@ -29,16 +29,29 @@ types.setTypeParser(20, (val) => parseInt(val, 10));
 
 // ── Connection pool ───────────────────────────────────────────────────────────
 // A pool reuses connections instead of opening a new TCP connection per query.
-// Max 10 connections is fine for a local lab demo; raise it for production.
-const pool = new Pool({
-  host:     process.env.DB_HOST     || 'localhost',
-  port:     parseInt(process.env.DB_PORT || '5432', 10),
-  user:     process.env.DB_USER     || 'postgres',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME     || 'donor_network',
-  max: 10,                  // maximum concurrent connections
-  idleTimeoutMillis: 30000, // close idle connections after 30 s
-});
+// Supports both individual DB_* env vars (local dev) and DATABASE_URL (cloud deployments).
+const connectionString = process.env.DATABASE_URL;
+const useSsl = process.env.DB_SSL === 'true' || Boolean(connectionString && !connectionString.includes('localhost'));
+
+const pool = new Pool(
+  connectionString
+    ? {
+        connectionString,
+        ssl: useSsl ? { rejectUnauthorized: false } : false,
+        max: 10,
+        idleTimeoutMillis: 30000,
+      }
+    : {
+        host:     process.env.DB_HOST     || 'localhost',
+        port:     parseInt(process.env.DB_PORT || '5432', 10),
+        user:     process.env.DB_USER     || 'postgres',
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_NAME     || 'donor_network',
+        ssl:      useSsl ? { rejectUnauthorized: false } : false,
+        max: 10,
+        idleTimeoutMillis: 30000,
+      }
+);
 
 // Log connection errors so they appear in the console instead of silently swallowing them.
 pool.on('error', (err) => {

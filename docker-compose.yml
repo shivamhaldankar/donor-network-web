@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: pulse_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: donor_network
+    ports:
+      - "5432:5432"
+    volumes:
+      - pulse_pgdata:/var/lib/postgresql/data
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pulse_app
+    restart: always
+    ports:
+      - "5000:5000"
+    environment:
+      PORT: 5000
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:postgrespassword@db:5432/donor_network
+      JWT_SECRET: supersecretproductionkey_change_me_to_random_string
+      ELIGIBILITY_SCHEDULER: node
+      NOTIFY_PROVIDER: console
+      ADMIN_EMAIL: admin@pulse.test
+      ADMIN_PASSWORD: Admin@123
+    depends_on:
+      - db
+
+volumes:
+  pulse_pgdata:

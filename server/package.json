@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "db:init": "node scripts/initDb.js",
     "seed:admin": "node scripts/seedAdmin.js"
   },
   "dependencies": {
